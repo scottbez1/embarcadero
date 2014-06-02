@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Embarcadero</string>
+
+    <string name="title_activity_main">Embarcadero</string>
+
+    <string name="login_title">Please sign into Dropbox</string>
+    <string name="login_button">Sign In</string>
+    <string name="sign_out_button">Sign Out</string>
+    <string name="start_recording_button">Start recording!</string>
+    <string name="stop_recording_button">Stop recording!</string>
+
+</resources>
