@@ -1,4 +1,4 @@
-package com.scottbezek.embarcadero.app.model;
+package com.scottbezek.embarcadero.app.model.location;
 
 import com.scottbezek.embarcadero.app.model.location.LocationUpdateProvider;
 import com.scottbezek.embarcadero.app.model.location.LocationUpdateProvider.LocationUpdateListener;

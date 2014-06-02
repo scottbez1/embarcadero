@@ -10,8 +10,8 @@ package com.scottbezek.embarcadero.app;
  */
 public class DropboxApiKey {
 
-    private static final String APP_KEY = "<PLACEHOLDER>";
+    public static final String APP_KEY = "<PLACEHOLDER>";
 
-    private static final String APP_SECRET = "<PLACEHOLDER>";
+    public static final String APP_SECRET = "<PLACEHOLDER>";
 
 }

@@ -9,6 +9,7 @@ import com.dropbox.sync.android.DbxTable;
 import com.scottbezek.embarcadero.app.model.UserStateManager.RefCountedObject;
 import com.scottbezek.embarcadero.app.model.data.PathListItem;
 import com.scottbezek.embarcadero.app.model.location.LocationUpdateProvider;
+import com.scottbezek.embarcadero.app.model.location.LocationUpdateQueue;
 import com.scottbezek.embarcadero.app.statestream.SuperStateStream;
 import com.scottbezek.embarcadero.app.util.DatastoreUtils.PotentialChangeListener;
 
@@ -42,6 +43,7 @@ public class PathManager {
                 @Override
                 public void onPotentialDataChange(DbxDatastore datastore) {
                     final List<PathListItem> pathList;
+                    // XXX TODO(sbezek): don't do this on the main thread
                     synchronized (mDatastoreLock) {
                         pathList = getPathList(datastore);
                     }
@@ -78,10 +80,11 @@ public class PathManager {
             @Override
             protected void runWithDatastore(DbxDatastore datastore) {
                 final DbxTable pathsTable = datastore.getTable("paths");
-                final PathRecordWriter pathWriter = new PathRecordWriter(pathsTable.insert());
                 final LocationUpdateQueue locationUpdateQueue = new LocationUpdateQueue(locationProvider);
 
+                final PathRecordWriter pathWriter;
                 synchronized (mDatastoreLock) {
+                    pathWriter = new PathRecordWriter(pathsTable.insert());
                     pathWriter.setStartTime(System.currentTimeMillis());
 //                    if (!DatastoreUtils.syncQuietly(datastore)) {
 //                        return;
@@ -179,79 +182,7 @@ public class PathManager {
         }
     }
 
-//    private final SuperStateStream<PathListState> mPathListStateSuperStateStream;
-//
-//    public static class PathListState {
-//
-//        @CheckForNull
-//        private final List<PathListItem> mItems;
-//
-//        public PathListState(List<PathListItem> items) {
-//            mItems = items;
-//        }
-//
-//        public boolean isReady() {
-//            return mItems != null;
-//        }
-//
-//        @Nonnull
-//        public List<PathListItem> getPathList() {
-//            if (mItems == null) {
-//                throw new IllegalStateException("Not ready");
-//            }
-//            return mItems;
-//        }
-//    }
-//
-//    // TODO(sbezek): maybe do record-id based "named" locking, to prevent sync during atomic mods?
-
-
-//    public static class PathCreationState {
-//
-//        private final String mRecordId;
-//        private final Path mPath;
-//
-//        public PathCreationState(@Nonnull String recordId, @CheckForNull Path path) {
-//            mRecordId = recordId;
-//            mPath = path;
-//        }
-//
-//        @Nonnull
-//        public String getRecordId() {
-//            return mRecordId;
-//        }
-//
-//        @CheckForNull
-//        public Path getPath() {
-//            return mPath;
-//        }
-//    }
-//
-//    public String createPath(@Nonnull String name) {
-//        final DbxRecord newPathRecord = mPathsTable.insert()
-//                .set("name", name);
-//        final String recordId = newPathRecord.getId();
-//
-//        // XXX: executor or something reasonable
-//        new Thread() {
-//            @Override
-//            public void run() {
-//                SystemClock.sleep(3000); // Just for fun!
-//                Path p = new Path(newPathRecord, PathManager.this);
-//                doSync();
-//            }
-//        }.enableProducer();
-//
-//        return recordId;
-//    }
-//
-//    @Override
-//    public void doSync() {
-//        try {
-//            mDatastoreRef.sync();
-//        } catch (DbxException e) {
-//            // TODO(sbezek): do something here
-//            throw new RuntimeException(e);
-//        }
-//    }
+    public SuperStateStream<List<PathListItem>> getPathListStream() {
+        return mPathListStream;
+    }
 }
