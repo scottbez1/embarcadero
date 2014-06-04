@@ -9,6 +9,8 @@ import com.dropbox.sync.android.DbxDatastoreStatus;
 import com.dropbox.sync.android.DbxException;
 import com.scottbezek.embarcadero.app.model.UserStateManager.RefCountedObject.Closer;
 import com.scottbezek.embarcadero.app.model.UserStateManager.RefCountedObject.Factory;
+import com.scottbezek.embarcadero.app.util.DatastoreUtils.AutoSyncingDatastoreWithLock;
+import com.scottbezek.embarcadero.app.util.DatastoreUtils.DatastoreWithLock;
 
 import android.os.Bundle;
 import android.util.Log;
@@ -89,7 +91,7 @@ public class UserStateManager {
 
         private final String mUserId;
         private final PathManager mPathManager;
-        private final RefCountedObject<DbxDatastore> mDatastoreRef;
+        private final RefCountedObject<AutoSyncingDatastoreWithLock> mDatastoreRef;
 
         // XXX
         private final SyncStatusListener mSyncStatusListener = new SyncStatusListener() {
@@ -101,22 +103,20 @@ public class UserStateManager {
         };
 
         UserState(final DbxAccount account) {
-            mDatastoreRef = new RefCountedObject<>(new Factory<DbxDatastore>() {
+            mDatastoreRef = new RefCountedObject<>(new Factory<AutoSyncingDatastoreWithLock>() {
                 @Nonnull
                 @Override
-                public DbxDatastore create() {
+                public AutoSyncingDatastoreWithLock create() {
                     try {
                         DbxDatastore datastore = DbxDatastore.openDefault(account);
-                        datastore.addSyncStatusListener(mSyncStatusListener);
-                        return datastore;
+                        return new AutoSyncingDatastoreWithLock(datastore);
                     } catch (DbxException e) {
                         throw new RuntimeException(e);
                     }
                 }
-            }, new Closer<DbxDatastore>() {
+            }, new Closer<AutoSyncingDatastoreWithLock>() {
                 @Override
-                public void close(@Nonnull DbxDatastore object) {
-                    object.removeSyncStatusListener(mSyncStatusListener);
+                public void close(@Nonnull AutoSyncingDatastoreWithLock object) {
                     object.close();
                 }
             });

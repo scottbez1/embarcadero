@@ -1,7 +1,6 @@
 package com.scottbezek.embarcadero.app.model;
 
 import com.dropbox.sync.android.DbxDatastore;
-import com.dropbox.sync.android.DbxDatastore.SyncStatusListener;
 import com.dropbox.sync.android.DbxException;
 import com.dropbox.sync.android.DbxList;
 import com.dropbox.sync.android.DbxRecord;
@@ -10,8 +9,8 @@ import com.scottbezek.embarcadero.app.model.UserStateManager.RefCountedObject;
 import com.scottbezek.embarcadero.app.model.data.PathListItem;
 import com.scottbezek.embarcadero.app.model.location.LocationUpdateProvider;
 import com.scottbezek.embarcadero.app.model.location.LocationUpdateQueue;
-import com.scottbezek.embarcadero.app.statestream.SuperStateStream;
-import com.scottbezek.embarcadero.app.util.DatastoreUtils.PotentialChangeListener;
+import com.scottbezek.embarcadero.app.util.DatastoreUtils;
+import com.scottbezek.embarcadero.app.util.DatastoreUtils.AutoSyncingDatastoreWithLock;
 
 import android.location.Location;
 
@@ -25,50 +24,13 @@ import javax.annotation.Nonnull;
  */
 public class PathManager {
 
-    private final Object mDatastoreLock = new Object();
-
-    private final RefCountedObject<DbxDatastore> mDatastoreRef;
+    private final RefCountedObject<AutoSyncingDatastoreWithLock> mDatastoreRef;
 
     private Thread mPathRecordThread = null;
     private final AtomicBoolean mShouldStopPathRecording = new AtomicBoolean();
 
-    private final SuperStateStream<List<PathListItem>> mPathListStream;
-
-    public PathManager(@Nonnull RefCountedObject<DbxDatastore> datastoreRef) {
+    public PathManager(@Nonnull RefCountedObject<AutoSyncingDatastoreWithLock> datastoreRef) {
         mDatastoreRef = datastoreRef;
-
-        mPathListStream = new SuperStateStream<List<PathListItem>>() {
-
-            private final SyncStatusListener mNotifyOnChangeListener = new PotentialChangeListener() {
-                @Override
-                public void onPotentialDataChange(DbxDatastore datastore) {
-                    final List<PathListItem> pathList;
-                    // XXX TODO(sbezek): don't do this on the main thread
-                    synchronized (mDatastoreLock) {
-                        pathList = getPathList(datastore);
-                    }
-                    update(pathList);
-                }
-            };
-
-            private DbxDatastore mLiveDatastore;
-
-            @Override
-            public void onFirstListenerRegistered() {
-                if (mLiveDatastore != null) {
-                    throw new IllegalStateException();
-                }
-                mLiveDatastore = mDatastoreRef.acquire();
-                mLiveDatastore.addSyncStatusListener(mNotifyOnChangeListener);
-            }
-
-            @Override
-            public void onLastListenerUnregistered() {
-                mLiveDatastore.removeSyncStatusListener(mNotifyOnChangeListener);
-                mDatastoreRef.release(mLiveDatastore);
-                mLiveDatastore = null;
-            }
-        };
     }
 
     public void startRecording(final LocationUpdateProvider locationProvider) {
@@ -78,17 +40,19 @@ public class PathManager {
         mShouldStopPathRecording.set(false);
         mPathRecordThread = new ThreadWithDatastore(mDatastoreRef) {
             @Override
-            protected void runWithDatastore(DbxDatastore datastore) {
+            protected void runWithDatastore(AutoSyncingDatastoreWithLock datastoreWithLock) {
+                final DbxDatastore datastore = datastoreWithLock.getDatastore();
+                final Object datastoreLock = datastoreWithLock.getLock();
                 final DbxTable pathsTable = datastore.getTable("paths");
                 final LocationUpdateQueue locationUpdateQueue = new LocationUpdateQueue(locationProvider);
 
                 final PathRecordWriter pathWriter;
-                synchronized (mDatastoreLock) {
+                synchronized (datastoreLock) {
                     pathWriter = new PathRecordWriter(pathsTable.insert());
                     pathWriter.setStartTime(System.currentTimeMillis());
-//                    if (!DatastoreUtils.syncQuietly(datastore)) {
-//                        return;
-//                    }
+                    if (!DatastoreUtils.syncQuietly(datastore)) {
+                        return;
+                    }
                 }
                 locationUpdateQueue.enableProducer();
 
@@ -99,11 +63,11 @@ public class PathManager {
                 while (true){
                     try {
                         Location updatedLocation = locationUpdateQueue.take();
-                        synchronized (mDatastoreLock) {
+                        synchronized (datastoreLock) {
                             pathWriter.addLocation(updatedLocation);
-//                            if (!DatastoreUtils.syncQuietly(datastore)) {
-//                                break;
-//                            }
+                            if (!DatastoreUtils.syncQuietly(datastore)) {
+                                break;
+                            }
                         }
                     } catch (InterruptedException e) {
                         if (mShouldStopPathRecording.get()) {
@@ -117,9 +81,9 @@ public class PathManager {
                 }
 
                 locationUpdateQueue.disableProducer();
-                synchronized (mDatastoreLock) {
+                synchronized (datastoreLock) {
                     pathWriter.setStopTime(System.currentTimeMillis());
-//                    DatastoreUtils.syncQuietly(datastore);
+                    DatastoreUtils.syncQuietly(datastore);
                 }
             }
         };
@@ -141,15 +105,15 @@ public class PathManager {
      */
     private static abstract class ThreadWithDatastore extends Thread {
 
-        private final RefCountedObject<DbxDatastore> mDatastoreRef;
+        private final RefCountedObject<AutoSyncingDatastoreWithLock> mDatastoreRef;
 
-        public ThreadWithDatastore(RefCountedObject<DbxDatastore> datastoreRef) {
+        public ThreadWithDatastore(RefCountedObject<AutoSyncingDatastoreWithLock> datastoreRef) {
             mDatastoreRef = datastoreRef;
         }
 
         @Override
         public final void run() {
-            final DbxDatastore ds = mDatastoreRef.acquire();
+            final AutoSyncingDatastoreWithLock ds = mDatastoreRef.acquire();
             try {
                 runWithDatastore(ds);
             } finally {
@@ -157,7 +121,7 @@ public class PathManager {
             }
         }
 
-        protected abstract void runWithDatastore(DbxDatastore datastore);
+        protected abstract void runWithDatastore(AutoSyncingDatastoreWithLock datastore);
     }
 
     private static List<PathListItem> getPathList(DbxDatastore datastore) {
@@ -180,9 +144,5 @@ public class PathManager {
             // XXX TODO
             throw new RuntimeException(e);
         }
-    }
-
-    public SuperStateStream<List<PathListItem>> getPathListStream() {
-        return mPathListStream;
     }
 }
