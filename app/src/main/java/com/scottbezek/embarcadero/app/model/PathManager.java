@@ -2,9 +2,14 @@ package com.scottbezek.embarcadero.app.model;
 
 import com.dropbox.sync.android.DbxDatastore;
 import com.dropbox.sync.android.DbxException;
+import com.dropbox.sync.android.DbxFields;
 import com.dropbox.sync.android.DbxList;
 import com.dropbox.sync.android.DbxRecord;
 import com.dropbox.sync.android.DbxTable;
+import com.dropbox.sync.android.DbxTable.QueryResult;
+import com.scottbezek.embarcadero.app.util.DatastoreUtils.LiveQuery;
+import com.scottbezek.embarcadero.app.util.DatastoreUtils.QueryLoader;
+import com.scottbezek.embarcadero.app.util.DatastoreUtils.QueryLoader.LoaderCallback;
 import com.scottbezek.embarcadero.app.util.RefCountedObject;
 import com.scottbezek.embarcadero.app.model.data.PathListItem;
 import com.scottbezek.embarcadero.app.model.location.LocationUpdateProvider;
@@ -14,6 +19,7 @@ import com.scottbezek.embarcadero.app.util.DatastoreUtils.AutoSyncingDatastoreWi
 import com.scottbezek.embarcadero.app.util.DatastoreUtils.DatastoreWithLock;
 
 import android.location.Location;
+import android.os.Handler;
 import android.provider.ContactsContract.Data;
 
 import java.util.ArrayList;
@@ -126,25 +132,24 @@ public class PathManager {
         protected abstract void runWithDatastore(DatastoreWithLock datastore);
     }
 
-    private static List<PathListItem> getPathList(DbxDatastore datastore) {
-        try {
-            DbxTable table = datastore.getTable("paths");
-            List<DbxRecord> paths = table.query().asList();
-            List<PathListItem> result = new ArrayList<>(paths.size());
-            for (DbxRecord record : paths) {
-                final DbxList coordinateTimeList = record.getList("coord_time");
+    private static final LiveQuery<List<PathListItem>> sPathListQuery = new LiveQuery<List<PathListItem>>("paths", new DbxFields()) {
+        @Override
+        public List<PathListItem> createImmutableSnapshot(QueryResult queryResult) {
+            List<PathListItem> result = new ArrayList<>();
+            for (DbxRecord record : queryResult) {
                 final PathListItem item = new PathListItem(
                         record.getId(),
-                        record.getString("name"),
+                        record.hasField("name") ? record.getString("name") : null,
                         record.getLong("start_time"),
-                        record.getLong("stop_time"),
-                        coordinateTimeList == null ? 0 : coordinateTimeList.size());
+                        record.hasField("stop_time") ? record.getLong("stop_time") : null,
+                        record.hasField("coord_time") ? record.getList("coord_time").size() : 0);
                 result.add(item);
             }
             return result;
-        } catch (DbxException e) {
-            // XXX TODO
-            throw new RuntimeException(e);
         }
+    };
+
+    public QueryLoader<List<PathListItem>> getPathListLoader() {
+        return new QueryLoader<>(mDatastoreRef, sPathListQuery);
     }
 }

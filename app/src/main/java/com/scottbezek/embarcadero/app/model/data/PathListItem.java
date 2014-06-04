@@ -15,13 +15,14 @@ public class PathListItem {
     @CheckForNull
     private final String mName;
 
-    @Nonnull
-    private final long mStartTimeMillis, mStopTimeMillis;
+    private final long mStartTimeMillis;
 
-    @Nonnull
+    @CheckForNull
+    private final Long mStopTimeMillis;
+
     private final int mPathSegmentCount;
 
-    public PathListItem(@Nonnull String recordId, @CheckForNull String name, @Nonnull long startTimeMillis, @Nonnull long stopTimeMillis, @Nonnull int pathSegmentCount) {
+    public PathListItem(@Nonnull String recordId, @CheckForNull String name, long startTimeMillis, @CheckForNull Long stopTimeMillis, int pathSegmentCount) {
         mRecordId = recordId;
         mName = name;
         mStartTimeMillis = startTimeMillis;
@@ -34,21 +35,20 @@ public class PathListItem {
         return mRecordId;
     }
 
+    @CheckForNull
     public String getName() {
         return mName;
     }
 
-    @Nonnull
     public long getStartTimeMillis() {
         return mStartTimeMillis;
     }
 
-    @Nonnull
-    public long getStopTimeMillis() {
+    @CheckForNull
+    public Long getStopTimeMillis() {
         return mStopTimeMillis;
     }
 
-    @Nonnull
     public int getPathSegmentCount() {
         return mPathSegmentCount;
     }

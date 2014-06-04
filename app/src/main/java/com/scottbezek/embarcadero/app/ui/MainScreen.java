@@ -10,6 +10,8 @@ import android.content.Context;
 import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewGroup.LayoutParams;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -57,5 +59,7 @@ public class MainScreen extends LinearLayout {
                 stopButton.setVisibility(GONE);
             }
         });
+
+        addView(new PathListScreen(context, userState.getPathManager()), new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1));
     }
 }
