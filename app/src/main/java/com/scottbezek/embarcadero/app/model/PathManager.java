@@ -5,14 +5,16 @@ import com.dropbox.sync.android.DbxException;
 import com.dropbox.sync.android.DbxList;
 import com.dropbox.sync.android.DbxRecord;
 import com.dropbox.sync.android.DbxTable;
-import com.scottbezek.embarcadero.app.model.UserStateManager.RefCountedObject;
+import com.scottbezek.embarcadero.app.util.RefCountedObject;
 import com.scottbezek.embarcadero.app.model.data.PathListItem;
 import com.scottbezek.embarcadero.app.model.location.LocationUpdateProvider;
 import com.scottbezek.embarcadero.app.model.location.LocationUpdateQueue;
 import com.scottbezek.embarcadero.app.util.DatastoreUtils;
 import com.scottbezek.embarcadero.app.util.DatastoreUtils.AutoSyncingDatastoreWithLock;
+import com.scottbezek.embarcadero.app.util.DatastoreUtils.DatastoreWithLock;
 
 import android.location.Location;
+import android.provider.ContactsContract.Data;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,7 +42,7 @@ public class PathManager {
         mShouldStopPathRecording.set(false);
         mPathRecordThread = new ThreadWithDatastore(mDatastoreRef) {
             @Override
-            protected void runWithDatastore(AutoSyncingDatastoreWithLock datastoreWithLock) {
+            protected void runWithDatastore(DatastoreWithLock datastoreWithLock) {
                 final DbxDatastore datastore = datastoreWithLock.getDatastore();
                 final Object datastoreLock = datastoreWithLock.getLock();
                 final DbxTable pathsTable = datastore.getTable("paths");
@@ -105,15 +107,15 @@ public class PathManager {
      */
     private static abstract class ThreadWithDatastore extends Thread {
 
-        private final RefCountedObject<AutoSyncingDatastoreWithLock> mDatastoreRef;
+        private final RefCountedObject<? extends DatastoreWithLock> mDatastoreRef;
 
-        public ThreadWithDatastore(RefCountedObject<AutoSyncingDatastoreWithLock> datastoreRef) {
+        public ThreadWithDatastore(RefCountedObject<? extends DatastoreWithLock> datastoreRef) {
             mDatastoreRef = datastoreRef;
         }
 
         @Override
         public final void run() {
-            final AutoSyncingDatastoreWithLock ds = mDatastoreRef.acquire();
+            final DatastoreWithLock ds = mDatastoreRef.acquire();
             try {
                 runWithDatastore(ds);
             } finally {
@@ -121,7 +123,7 @@ public class PathManager {
             }
         }
 
-        protected abstract void runWithDatastore(AutoSyncingDatastoreWithLock datastore);
+        protected abstract void runWithDatastore(DatastoreWithLock datastore);
     }
 
     private static List<PathListItem> getPathList(DbxDatastore datastore) {
