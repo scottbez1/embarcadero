@@ -58,7 +58,7 @@ public class PathManager {
                 synchronized (datastoreLock) {
                     pathWriter = new PathRecordWriter(pathsTable.insert());
                     pathWriter.setStartTime(System.currentTimeMillis());
-                    if (!DatastoreUtils.syncQuietly(datastore)) {
+                    if (!DatastoreUtils.syncQuietly(datastoreWithLock)) {
                         return;
                     }
                 }
@@ -73,7 +73,7 @@ public class PathManager {
                         Location updatedLocation = locationUpdateQueue.take();
                         synchronized (datastoreLock) {
                             pathWriter.addLocation(updatedLocation);
-                            if (!DatastoreUtils.syncQuietly(datastore)) {
+                            if (!DatastoreUtils.syncQuietly(datastoreWithLock)) {
                                 break;
                             }
                         }
@@ -91,7 +91,7 @@ public class PathManager {
                 locationUpdateQueue.disableProducer();
                 synchronized (datastoreLock) {
                     pathWriter.setStopTime(System.currentTimeMillis());
-                    DatastoreUtils.syncQuietly(datastore);
+                    DatastoreUtils.syncQuietly(datastoreWithLock);
                 }
             }
         };

@@ -11,12 +11,19 @@ import com.dropbox.sync.android.DbxDatastoreStatus;
 import com.dropbox.sync.android.DbxException;
 import com.dropbox.sync.android.DbxException.NotFound;
 import com.dropbox.sync.android.DbxFields;
+import com.dropbox.sync.android.DbxRecord;
 import com.dropbox.sync.android.DbxTable;
 import com.dropbox.sync.android.DbxTable.QueryResult;
+import com.scottbezek.embarcadero.app.util.DatastoreUtils.DatastoreWithLock.OnSyncListener;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -31,9 +38,9 @@ public class DatastoreUtils {
     /**
      * Calls {@link com.dropbox.sync.android.DbxDatastore#sync()} and returns true if successful, or false if the datastore was deleted remotely. Throws a {@link java.lang.RuntimeException} if something fails while modifying local state.
      */
-    public static boolean syncQuietly(@Nonnull DbxDatastore datastore) {
+    public static boolean syncQuietly(@Nonnull DatastoreWithLock datastoreWithLock) {
         try {
-            datastore.sync();
+            datastoreWithLock.doSync();
             return true;
         } catch (NotFound e) {
             return false;
@@ -89,6 +96,8 @@ public class DatastoreUtils {
         private final DbxDatastore mDatastore;
         private final Object mLock = new Object();
 
+        private Map<OnSyncListener, Handler> mListeners = new HashMap<>();
+
         public DatastoreWithLock(@Nonnull DbxDatastore datastore) {
             mDatastore = datastore;
         }
@@ -103,8 +112,58 @@ public class DatastoreUtils {
             return mLock;
         }
 
+        public Map<String, Set<DbxRecord>> doSync() throws DbxException {
+            if (!Thread.holdsLock(mLock)) {
+                throw new IllegalStateException("Must hold lock during sync");
+            }
+            Map<String, Set<DbxRecord>> result = mDatastore.sync();
+
+            synchronized (mListeners) {
+                for (Entry<OnSyncListener, Handler> entry : mListeners.entrySet()) {
+                    final OnSyncListener listener = entry.getKey();
+                    entry.getValue().postAtTime(new Runnable() {
+                        @Override
+                        public void run() {
+                            listener.onSynced();
+                        }
+                    }, listener, 0);
+                }
+            }
+            return result;
+        }
+
         public void close() {
             mDatastore.close();
+        }
+
+        public void addSyncListener(OnSyncListener listener) {
+            synchronized (mListeners) {
+                if (mListeners.containsKey(listener)) {
+                    throw new IllegalStateException("Already registered");
+                }
+                mListeners.put(listener, new Handler(Looper.myLooper()));
+            }
+        }
+
+        public void removeSyncListener(OnSyncListener listener) {
+            synchronized (mListeners) {
+                Handler removed = mListeners.remove(listener);
+                if (removed == null) {
+                    throw new IllegalStateException("Not registered");
+                }
+                if (removed.getLooper() != Looper.myLooper()) {
+                    throw new IllegalStateException("Must unregister on original Looper");
+                }
+                removed.removeCallbacksAndMessages(listener);
+            }
+        }
+
+        public interface OnSyncListener {
+            /**
+             * A reasonable proxy for data within the datastore having changed. Syncs are invoked
+             * after local changes are made, or when remote changes become available.
+             */
+            void onSynced();
         }
     }
 
@@ -122,7 +181,7 @@ public class DatastoreUtils {
                 }
                 synchronized (getLock()) {
                     Log.d(TAG, "Data potentially changed, going to sync...");
-                    syncQuietly(expectedDatastore);
+                    syncQuietly(AutoSyncingDatastoreWithLock.this);
                 }
             }
         };
@@ -178,9 +237,9 @@ public class DatastoreUtils {
         @GuardedBy("mLock")
         private Handler mCallbackHandler;
 
-        private final SyncStatusListener mChangeListener = new PotentialDataChangeListener() {
+        private final OnSyncListener mChangeListener = new OnSyncListener() {
             @Override
-            public void onPotentialDataChange(DbxDatastore datastore) {
+            public void onSynced() {
                 Log.d(TAG, "Got potential data change, going to trigger reload!");
                 triggerReload();
             }
@@ -203,7 +262,7 @@ public class DatastoreUtils {
                 mCallback = callback;
                 mCallbackHandler = callbackHandler;
                 mLiveDatastore = mDatastoreRef.acquire();
-                mLiveDatastore.getDatastore().addSyncStatusListener(mChangeListener);
+                mLiveDatastore.addSyncListener(mChangeListener);
                 triggerReload();
             }
         }
@@ -244,7 +303,7 @@ public class DatastoreUtils {
                 if (mLiveDatastore == null) {
                     throw new IllegalStateException("Not started");
                 }
-                mLiveDatastore.getDatastore().removeSyncStatusListener(mChangeListener);
+                mLiveDatastore.removeSyncListener(mChangeListener);
                 mDatastoreRef.release(mLiveDatastore);
                 mLiveDatastore = null;
             }
