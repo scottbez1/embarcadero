@@ -58,6 +58,7 @@ public class PathListScreen extends FrameLayout {
 //            }
 //        }, Looper.getMainLooper());
         mPathListSubscription = mPathListObservable
+                .distinctUntilChanged()
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(new Observer<List<PathListItem>>() {
                     @Override
