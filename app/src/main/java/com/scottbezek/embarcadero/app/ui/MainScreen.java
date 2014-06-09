@@ -3,8 +3,10 @@ package com.scottbezek.embarcadero.app.ui;
 import com.google.android.gms.location.LocationRequest;
 
 import com.scottbezek.embarcadero.app.R;
+import com.scottbezek.embarcadero.app.model.PathManager;
 import com.scottbezek.embarcadero.app.model.UserStateManager.UserState;
 import com.scottbezek.embarcadero.app.model.location.GooglePlayServicesLocationUpdateProvider;
+import com.scottbezek.embarcadero.app.util.ResettableClickListener;
 
 import android.content.Context;
 import android.os.Looper;
@@ -16,15 +18,24 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import rx.Observable;
+import rx.Observer;
+import rx.Subscription;
+import rx.android.schedulers.AndroidSchedulers;
+import rx.functions.Action1;
+
 /**
  */
 public class MainScreen extends LinearLayout {
 
-    private final UserState mUserState;
+    private final Observable<Boolean> mRecordingState;
+    private final Action1<Boolean> mRecordingStateChange;
+
+    private Subscription mRecordingStateSubscription;
 
     public MainScreen(final Context context, UserState userState) {
         super(context);
-        mUserState = userState;
+
         setOrientation(VERTICAL);
         LayoutInflater.from(context).inflate(R.layout.screen_main, this, true);
 
@@ -42,24 +53,53 @@ public class MainScreen extends LinearLayout {
         final Button startButton = (Button)findViewById(R.id.start_button);
         final Button stopButton = (Button)findViewById(R.id.stop_button);
 
-        startButton.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mUserState.getPathManager().startRecording(new GooglePlayServicesLocationUpdateProvider(context, dummyRequest, Looper.getMainLooper()));
-                startButton.setVisibility(GONE);
-                stopButton.setVisibility(VISIBLE);
-            }
-        });
+        final PathManager pathManager = userState.getPathManager();
+        mRecordingState = pathManager.getRecordingState();
 
-        stopButton.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mUserState.getPathManager().stopRecording();
-                startButton.setVisibility(VISIBLE);
-                stopButton.setVisibility(GONE);
-            }
-        });
 
-        addView(new PathListScreen(context, userState.getPathManager()), new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1));
+        final ResettableClickListener startClickListener;
+        final ResettableClickListener stopClickListener;
+        startClickListener = new ResettableClickListener() {
+            @Override
+            protected void onClick() {
+                pathManager.startRecording(new GooglePlayServicesLocationUpdateProvider(
+                        context, dummyRequest, Looper.getMainLooper()));
+            }
+        };
+        startButton.setOnClickListener(startClickListener);
+
+        stopClickListener = new ResettableClickListener() {
+            @Override
+            protected void onClick() {
+                pathManager.stopRecording();
+            }
+        };
+        stopButton.setOnClickListener(stopClickListener);
+
+        mRecordingStateChange = new Action1<Boolean>() {
+            @Override
+            public void call(Boolean recording) {
+                stopButton.setVisibility(recording ? View.VISIBLE : View.GONE);
+                startButton.setVisibility(recording ? View.GONE : View.VISIBLE);
+                startClickListener.reset();
+                stopClickListener.reset();
+            }
+        };
+
+        addView(new PathListScreen(context, pathManager), new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1));
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        mRecordingStateSubscription = mRecordingState
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(mRecordingStateChange);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        mRecordingStateSubscription.unsubscribe();
     }
 }

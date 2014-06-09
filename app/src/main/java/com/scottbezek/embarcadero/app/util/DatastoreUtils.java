@@ -2,7 +2,6 @@ package com.scottbezek.embarcadero.app.util;
 
 import android.os.Handler;
 import android.os.Looper;
-import android.provider.ContactsContract.Data;
 import android.util.Log;
 
 import com.dropbox.sync.android.DbxDatastore;
@@ -16,19 +15,14 @@ import com.dropbox.sync.android.DbxTable;
 import com.dropbox.sync.android.DbxTable.QueryResult;
 import com.scottbezek.embarcadero.app.util.DatastoreUtils.DatastoreWithLock.OnSyncListener;
 
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
 import javax.annotation.Nonnull;
-import javax.annotation.ParametersAreNonnullByDefault;
 import javax.annotation.concurrent.GuardedBy;
 
 public class DatastoreUtils {
@@ -198,12 +192,12 @@ public class DatastoreUtils {
         }
     }
 
-    public abstract static class LiveQuery<T> {
+    public abstract static class DatastoreQuery<T> {
 
         private final String mTableId;
         private final DbxFields mQuery;
 
-        public LiveQuery(String tableId, DbxFields query) {
+        public DatastoreQuery(String tableId, DbxFields query) {
             mTableId = tableId;
             mQuery = query;
         }
@@ -213,7 +207,7 @@ public class DatastoreUtils {
          */
         public abstract T createImmutableSnapshot(QueryResult result);
 
-        final T execute(DatastoreWithLock datastoreWithLock) throws DbxException {
+        public final T executeOnDatastore(DatastoreWithLock datastoreWithLock) throws DbxException {
             synchronized (datastoreWithLock.getLock()) {
                 DbxTable table = datastoreWithLock.getDatastore().getTable(mTableId);
                 return createImmutableSnapshot(table.query(mQuery));
@@ -221,13 +215,24 @@ public class DatastoreUtils {
         }
     }
 
-    public static class QueryLoader<T> {
+    public interface DataStream<T> {
+
+        public interface LoaderCallback<T> {
+            void onNewData(T data);
+        }
+
+        void start(LoaderCallback<T> callback, Looper callbackLooper);
+
+        void stop();
+    }
+
+    public static class QueryLoader<T> implements DataStream<T> {
 
         private static final String TAG = QueryLoader.class.getName();
 
         private final RefCountedObject<? extends DatastoreWithLock> mDatastoreRef;
         private final Executor mQueryExecutor = Executors.newSingleThreadExecutor();
-        private final LiveQuery<T> mQuery;
+        private final DatastoreQuery<T> mQuery;
 
         private final Object mLock = new Object();
         @GuardedBy("mLock")
@@ -245,22 +250,18 @@ public class DatastoreUtils {
             }
         };
 
-        public interface LoaderCallback<T> {
-            void onNewData(T data);
-        }
-
-        public QueryLoader(RefCountedObject<? extends DatastoreWithLock> datastoreRef, LiveQuery<T> query) {
+        public QueryLoader(RefCountedObject<? extends DatastoreWithLock> datastoreRef, DatastoreQuery<T> query) {
             mDatastoreRef = datastoreRef;
             mQuery = query;
         }
 
-        public void start(LoaderCallback<T> callback, Handler callbackHandler) {
+        public void start(LoaderCallback<T> callback, Looper callbackLooper) {
             synchronized (mLock) {
                 if (mLiveDatastore != null) {
                     throw new IllegalStateException("Already started!");
                 }
                 mCallback = callback;
-                mCallbackHandler = callbackHandler;
+                mCallbackHandler = new Handler(callbackLooper);
                 mLiveDatastore = mDatastoreRef.acquire();
                 mLiveDatastore.addSyncListener(mChangeListener);
                 triggerReload();
@@ -273,7 +274,7 @@ public class DatastoreUtils {
                 public void run() {
                     final DatastoreWithLock datastore = mDatastoreRef.acquire();
                     try {
-                        notifyCallback(mQuery.execute(datastore));
+                        notifyCallback(mQuery.executeOnDatastore(datastore));
                     } catch (DbxException e) {
                         // XXX TODO
                         throw new RuntimeException(e);
