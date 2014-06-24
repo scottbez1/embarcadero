@@ -1,30 +1,35 @@
 package com.scottbezek.embarcadero.app.model;
 
+import android.location.Location;
+
 import com.dropbox.sync.android.DbxDatastore;
 import com.dropbox.sync.android.DbxException;
 import com.dropbox.sync.android.DbxFields;
 import com.dropbox.sync.android.DbxRecord;
 import com.dropbox.sync.android.DbxTable;
 import com.dropbox.sync.android.DbxTable.QueryResult;
-import com.scottbezek.embarcadero.app.util.DatastoreUtils.DataStream;
-import com.scottbezek.embarcadero.app.util.DatastoreUtils.DatastoreQuery;
-import com.scottbezek.embarcadero.app.util.DatastoreUtils.DatastoreWithLock.OnSyncListener;
-import com.scottbezek.embarcadero.app.util.DatastoreUtils.QueryLoader;
-import com.scottbezek.embarcadero.app.util.RefCountedObject;
+import com.scottbezek.embarcadero.app.model.data.PathCoord;
 import com.scottbezek.embarcadero.app.model.data.PathListItem;
 import com.scottbezek.embarcadero.app.model.location.LocationUpdateProvider;
 import com.scottbezek.embarcadero.app.model.location.LocationUpdateQueue;
 import com.scottbezek.embarcadero.app.util.DatastoreUtils;
 import com.scottbezek.embarcadero.app.util.DatastoreUtils.AutoSyncingDatastoreWithLock;
+import com.scottbezek.embarcadero.app.util.DatastoreUtils.DataStream;
+import com.scottbezek.embarcadero.app.util.DatastoreUtils.DatastoreQuery;
+import com.scottbezek.embarcadero.app.util.DatastoreUtils.DatastoreRowQuery;
+import com.scottbezek.embarcadero.app.util.DatastoreUtils.DatastoreTableQuery;
 import com.scottbezek.embarcadero.app.util.DatastoreUtils.DatastoreWithLock;
-
-import android.location.Location;
+import com.scottbezek.embarcadero.app.util.DatastoreUtils.DatastoreWithLock.OnSyncListener;
+import com.scottbezek.embarcadero.app.util.DatastoreUtils.QueryLoader;
+import com.scottbezek.embarcadero.app.util.RefCountedObject;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
+import javax.annotation.concurrent.Immutable;
 
 import rx.Observable;
 import rx.Scheduler;
@@ -42,17 +47,40 @@ public class PathManager {
 
     private Thread mPathRecordThread = null;
     private final AtomicBoolean mShouldStopPathRecording = new AtomicBoolean();
-    private final BehaviorSubject<Boolean> mRecordingStateSubject = BehaviorSubject.create(false);
+    private final BehaviorSubject<RecordingState> mRecordingStateSubject = BehaviorSubject.create(new RecordingState(false, null));
 
     public PathManager(@Nonnull RefCountedObject<AutoSyncingDatastoreWithLock> datastoreRef) {
         mDatastoreRef = datastoreRef;
+    }
+
+    @Immutable
+    public class RecordingState {
+
+        private final boolean mRecording;
+
+        @CheckForNull
+        private final String mPathRecordId;
+
+        public RecordingState(boolean recording, String pathRecordId) {
+            mRecording = recording;
+            mPathRecordId = pathRecordId;
+        }
+
+        public boolean isRecording() {
+            return mRecording;
+        }
+
+        @CheckForNull
+        public String getPathRecordId() {
+            return mPathRecordId;
+        }
     }
 
     public void startRecording(final LocationUpdateProvider locationProvider) {
         if (mPathRecordThread != null) {
             throw new IllegalStateException("Already recording!");
         }
-        mRecordingStateSubject.onNext(true);
+        mRecordingStateSubject.onNext(new RecordingState(true, null));
         mShouldStopPathRecording.set(false);
         mPathRecordThread = new ThreadWithDatastore(mDatastoreRef) {
             @Override
@@ -64,11 +92,13 @@ public class PathManager {
 
                 final PathRecordWriter pathWriter;
                 synchronized (datastoreLock) {
-                    pathWriter = new PathRecordWriter(pathsTable.insert());
+                    DbxRecord pathRecord = pathsTable.insert();
+                    pathWriter = new PathRecordWriter(pathRecord);
                     pathWriter.setStartTime(System.currentTimeMillis());
                     if (!DatastoreUtils.syncQuietly(datastoreWithLock)) {
                         return;
                     }
+                    mRecordingStateSubject.onNext(new RecordingState(true, pathRecord.getId()));
                 }
                 locationUpdateQueue.enableProducer();
 
@@ -111,7 +141,7 @@ public class PathManager {
             throw new IllegalStateException("Not recording");
         }
         mShouldStopPathRecording.set(true);
-        mRecordingStateSubject.onNext(false);
+        mRecordingStateSubject.onNext(new RecordingState(false, null));
         mPathRecordThread.interrupt();
 
         mPathRecordThread = null;
@@ -141,7 +171,8 @@ public class PathManager {
         protected abstract void runWithDatastore(DatastoreWithLock datastore);
     }
 
-    private static final DatastoreQuery<List<PathListItem>> PATH_LIST_QUERY = new DatastoreQuery<List<PathListItem>>("paths", new DbxFields()) {
+    private static final DatastoreQuery<List<PathListItem>> PATH_LIST_QUERY =
+            new DatastoreTableQuery<List<PathListItem>>("paths", new DbxFields()) {
         @Override
         public List<PathListItem> createImmutableSnapshot(QueryResult queryResult) {
             List<PathListItem> result = new ArrayList<>();
@@ -158,16 +189,33 @@ public class PathManager {
         }
     };
 
+    private static DatastoreQuery<List<PathCoord>> getPathCoordsQuery(String pathRecordId) {
+        return new DatastoreRowQuery<List<PathCoord>>("paths", pathRecordId) {
+            @Override
+            public List<PathCoord> createImmutableSnapshot(@CheckForNull DbxRecord result) {
+                if (result == null) {
+                    // TODO(sbezek): make a useful RuntimeException subclass: RecordNotFoundException?
+                    throw new RuntimeException("Record not found");
+                } else {
+                    return PathCoord.listFrom(result);
+                }
+            }
+        };
+    }
+
     public DataStream<List<PathListItem>> getPathListLoader() {
         return new QueryLoader<>(mDatastoreRef, PATH_LIST_QUERY);
     }
 
-
-    public Observable<List<PathListItem>> getPathList(Scheduler scheduler) {
-        return QueryObservable.createObservable(mDatastoreRef, PATH_LIST_QUERY, scheduler);
+    public Observable<List<PathListItem>> getPathList(Scheduler queryExecutionScheduler) {
+        return QueryObservable.createObservable(mDatastoreRef, PATH_LIST_QUERY, queryExecutionScheduler);
     }
 
-    public Observable<Boolean> getRecordingState() {
+    public Observable<List<PathCoord>> getPathCoords(String pathRecordId, Scheduler queryExecutionScheduler) {
+        return QueryObservable.createObservable(mDatastoreRef, getPathCoordsQuery(pathRecordId), queryExecutionScheduler);
+    }
+
+    public Observable<RecordingState> getRecordingState() {
         return mRecordingStateSubject.asObservable();
     }
 
@@ -204,6 +252,8 @@ public class PathManager {
                             } catch (DbxException e) {
                                 subscriber.onError(e);
                                 // TODO(sbezek): unregister change listener and stop emitting data?
+                            } catch (Throwable e) {
+                                subscriber.onError(e);
                             }
                         }
                     });

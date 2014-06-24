@@ -1,35 +1,31 @@
 package com.scottbezek.embarcadero.app.ui;
 
-import com.google.android.gms.location.LocationRequest;
-
-import com.scottbezek.embarcadero.app.R;
-import com.scottbezek.embarcadero.app.model.PathManager;
-import com.scottbezek.embarcadero.app.model.UserStateManager.UserState;
-import com.scottbezek.embarcadero.app.model.location.GooglePlayServicesLocationUpdateProvider;
-import com.scottbezek.embarcadero.app.util.ResettableClickListener;
-
 import android.content.Context;
 import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
-import android.view.ViewGroup.LayoutParams;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import com.google.android.gms.location.LocationRequest;
+import com.scottbezek.embarcadero.app.R;
+import com.scottbezek.embarcadero.app.model.PathManager;
+import com.scottbezek.embarcadero.app.model.PathManager.RecordingState;
+import com.scottbezek.embarcadero.app.model.UserStateManager.UserState;
+import com.scottbezek.embarcadero.app.model.location.GooglePlayServicesLocationUpdateProvider;
+import com.scottbezek.embarcadero.app.util.ResettableClickListener;
+
 import rx.Observable;
-import rx.Observer;
 import rx.Subscription;
 import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Action1;
+import rx.schedulers.Schedulers;
 
-/**
- */
 public class MainScreen extends LinearLayout {
 
-    private final Observable<Boolean> mRecordingState;
-    private final Action1<Boolean> mRecordingStateChange;
+    private final Observable<RecordingState> mRecordingState;
+    private final Action1<RecordingState> mRecordingStateChange;
 
     private Subscription mRecordingStateSubscription;
 
@@ -76,17 +72,27 @@ public class MainScreen extends LinearLayout {
         };
         stopButton.setOnClickListener(stopClickListener);
 
-        mRecordingStateChange = new Action1<Boolean>() {
-            @Override
-            public void call(Boolean recording) {
-                stopButton.setVisibility(recording ? View.VISIBLE : View.GONE);
-                startButton.setVisibility(recording ? View.GONE : View.VISIBLE);
-                startClickListener.reset();
-                stopClickListener.reset();
-            }
-        };
 
         addView(new PathListScreen(context, pathManager), new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1));
+
+        final MapScreen mapScreen = new MapScreen(context);
+        addView(mapScreen, new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1));
+
+        mRecordingStateChange = new Action1<RecordingState>() {
+            @Override
+            public void call(RecordingState state) {
+                stopButton.setVisibility(state.isRecording() ? View.VISIBLE : View.GONE);
+                startButton.setVisibility(state.isRecording() ? View.GONE : View.VISIBLE);
+                startClickListener.reset();
+                stopClickListener.reset();
+
+                if (state.isRecording()) {
+                    mapScreen.setData(pathManager.getPathCoords(state.getPathRecordId(), Schedulers.io()));
+                } else {
+
+                }
+            }
+        };
     }
 
     @Override

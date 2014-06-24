@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
+import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -192,12 +193,16 @@ public class DatastoreUtils {
         }
     }
 
-    public abstract static class DatastoreQuery<T> {
+    public interface DatastoreQuery<T> {
+        T executeOnDatastore(DatastoreWithLock datastoreWithLock) throws DbxException;
+    }
+
+    public abstract static class DatastoreTableQuery<T> implements DatastoreQuery<T> {
 
         private final String mTableId;
         private final DbxFields mQuery;
 
-        public DatastoreQuery(String tableId, DbxFields query) {
+        public DatastoreTableQuery(String tableId, DbxFields query) {
             mTableId = tableId;
             mQuery = query;
         }
@@ -205,12 +210,40 @@ public class DatastoreUtils {
         /**
          * Given a query result, returns an <b>IMMUTABLE</b> snapshot of that data. The input {@link com.dropbox.sync.android.DbxTable.QueryResult}, while mutable, will not change throughout the duration of this call.
          */
-        public abstract T createImmutableSnapshot(QueryResult result);
+        public abstract T createImmutableSnapshot(@Nonnull QueryResult result);
 
+        @Override
         public final T executeOnDatastore(DatastoreWithLock datastoreWithLock) throws DbxException {
             synchronized (datastoreWithLock.getLock()) {
                 DbxTable table = datastoreWithLock.getDatastore().getTable(mTableId);
                 return createImmutableSnapshot(table.query(mQuery));
+            }
+        }
+    }
+
+    public abstract static class DatastoreRowQuery<T> implements DatastoreQuery<T> {
+
+        private final String mTableId;
+        private final String mRecordId;
+
+        public DatastoreRowQuery(String tableId, String recordId) {
+            mTableId = tableId;
+            mRecordId = recordId;
+        }
+
+        /**
+         * Given a query result, returns an <b>IMMUTABLE</b> snapshot of that data. The input {@link com.dropbox.sync.android.DbxRecord}, while mutable, will not change throughout the duration of this call.
+         */
+        public abstract T createImmutableSnapshot(@CheckForNull DbxRecord result);
+
+        @Override
+        public final T executeOnDatastore(DatastoreWithLock datastoreWithLock) throws DbxException {
+            synchronized (datastoreWithLock.getLock()) {
+                DbxTable table = datastoreWithLock.getDatastore().getTable(mTableId);
+                Log.d("FOOBAR", "GOING TO GET " + mRecordId);
+                DbxRecord result = table.get(mRecordId);
+                Log.d("FOOBAR", "GOT " + result);
+                return createImmutableSnapshot(result);
             }
         }
     }

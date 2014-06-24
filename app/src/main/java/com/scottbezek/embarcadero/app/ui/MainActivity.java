@@ -1,18 +1,18 @@
 package com.scottbezek.embarcadero.app.ui;
 
-import com.dropbox.sync.android.DbxAccountManager;
-import com.scottbezek.embarcadero.app.EmbarcaderoApplication;
-import com.scottbezek.embarcadero.app.R;
-import com.scottbezek.embarcadero.app.model.UserStateManager;
-import com.scottbezek.embarcadero.app.model.UserStateManager.UserState;
-import com.scottbezek.embarcadero.app.ui.LoginScreen.Callbacks;
-
 import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup.LayoutParams;
 import android.widget.FrameLayout;
+
+import com.dropbox.sync.android.DbxAccountManager;
+import com.scottbezek.embarcadero.app.EmbarcaderoApplication;
+import com.scottbezek.embarcadero.app.R;
+import com.scottbezek.embarcadero.app.model.UserStateManager;
+import com.scottbezek.embarcadero.app.model.UserStateManager.UserState;
+import com.scottbezek.embarcadero.app.ui.LoginScreen.Callbacks;
 
 
 public class MainActivity extends Activity {

@@ -1,19 +1,14 @@
 package com.scottbezek.embarcadero.app.ui;
 
-import com.scottbezek.embarcadero.app.model.PathManager;
-import com.scottbezek.embarcadero.app.model.data.PathListItem;
-import com.scottbezek.embarcadero.app.util.DatastoreUtils.DataStream;
-import com.scottbezek.embarcadero.app.util.DatastoreUtils.DataStream.LoaderCallback;
-
 import android.content.Context;
-import android.os.Handler;
-import android.os.Looper;
-import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.FrameLayout;
 import android.widget.ListView;
+
+import com.scottbezek.embarcadero.app.model.PathManager;
+import com.scottbezek.embarcadero.app.model.data.PathListItem;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,14 +25,12 @@ public class PathListScreen extends FrameLayout {
     private static final String TAG = PathListScreen.class.getName();
 
     private final PathListAdapter mAdapter;
-//    private final DataStream<List<PathListItem>> mPathListStream;
     private final Observable<List<PathListItem>> mPathListObservable;
     private Subscription mPathListSubscription;
 
     public PathListScreen(Context context, PathManager pathManager) {
         super(context);
 
-//        mPathListStream = pathManager.getPathListLoader();
         mPathListObservable = pathManager.getPathList(Schedulers.io());
         mAdapter = new PathListAdapter(context);
 
@@ -50,13 +43,6 @@ public class PathListScreen extends FrameLayout {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-//        mPathListStream.start(new LoaderCallback<List<PathListItem>>() {
-//            @Override
-//            public void onNewData(List<PathListItem> data) {
-//                Log.d(TAG, "Got new data, setting it: " + data.size());
-//                mAdapter.setData(data);
-//            }
-//        }, Looper.getMainLooper());
         mPathListSubscription = mPathListObservable
                 .distinctUntilChanged()
                 .observeOn(AndroidSchedulers.mainThread())
@@ -79,9 +65,12 @@ public class PathListScreen extends FrameLayout {
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-//        mPathListStream.stop();
         mPathListSubscription.unsubscribe();
         mAdapter.setData(Collections.<PathListItem>emptyList());
+    }
+
+    public interface PathSelectedListener {
+        void onPathSelected(String pathId);
     }
 
     private static class PathListAdapter extends BaseAdapter {
