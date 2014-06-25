@@ -1,6 +1,7 @@
 package com.scottbezek.embarcadero.app.ui;
 
 import android.content.Context;
+import android.location.Location;
 import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -18,11 +19,15 @@ import com.scottbezek.embarcadero.app.model.location.GooglePlayServicesLocationU
 import com.scottbezek.embarcadero.app.util.ResettableClickListener;
 
 import java.util.Collections;
+import java.util.List;
 
+import pl.charmas.android.reactivelocation.observables.location.LastKnownLocationObservable;
+import pl.charmas.android.reactivelocation.observables.location.LocationUpdatesObservable;
 import rx.Observable;
 import rx.Subscription;
 import rx.android.schedulers.AndroidSchedulers;
 import rx.functions.Action1;
+import rx.functions.Func1;
 import rx.schedulers.Schedulers;
 
 public class MainScreen extends LinearLayout {
@@ -92,8 +97,20 @@ public class MainScreen extends LinearLayout {
                 if (state.isRecording()) {
                     mapScreen.setData(pathManager.getPathCoords(state.getPathRecordId(), Schedulers.io()));
                 } else {
-                    // TODO(sbezek): hook up location provider to provide a stream of single-item lists containing the current location
-                    mapScreen.setData(Observable.from(Collections.singletonList(Collections.<PathCoord>emptyList())));
+                    Observable<List<PathCoord>> currentLocation = Observable.concat(
+                            LastKnownLocationObservable.createObservable(getContext()),
+                            LocationUpdatesObservable.createObservable(getContext(), dummyRequest))
+                            .map(new Func1<Location, List<PathCoord>>() {
+                                @Override
+                                public List<PathCoord> call(Location location) {
+                                    if (location == null) {
+                                        return Collections.emptyList();
+                                    } else {
+                                        return Collections.singletonList(PathCoord.from(location));
+                                    }
+                                }
+                            });
+                    mapScreen.setData(currentLocation);
                 }
             }
         };

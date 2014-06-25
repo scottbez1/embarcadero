@@ -1,5 +1,7 @@
 package com.scottbezek.embarcadero.app.model.data;
 
+import android.location.Location;
+
 import com.dropbox.sync.android.DbxList;
 import com.dropbox.sync.android.DbxRecord;
 import com.scottbezek.embarcadero.app.util.Asserts;
@@ -70,5 +72,10 @@ public class PathCoord {
                     altitudes.getDouble(i)));
         }
         return coords;
+    }
+
+    public static PathCoord from(Location location) {
+        return new PathCoord(location.getTime(), location.getLatitude(), location.getLongitude(),
+                location.getAccuracy(), location.getAltitude());
     }
 }
