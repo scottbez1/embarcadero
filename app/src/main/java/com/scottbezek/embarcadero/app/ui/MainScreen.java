@@ -13,8 +13,11 @@ import com.scottbezek.embarcadero.app.R;
 import com.scottbezek.embarcadero.app.model.PathManager;
 import com.scottbezek.embarcadero.app.model.PathManager.RecordingState;
 import com.scottbezek.embarcadero.app.model.UserStateManager.UserState;
+import com.scottbezek.embarcadero.app.model.data.PathCoord;
 import com.scottbezek.embarcadero.app.model.location.GooglePlayServicesLocationUpdateProvider;
 import com.scottbezek.embarcadero.app.util.ResettableClickListener;
+
+import java.util.Collections;
 
 import rx.Observable;
 import rx.Subscription;
@@ -89,7 +92,8 @@ public class MainScreen extends LinearLayout {
                 if (state.isRecording()) {
                     mapScreen.setData(pathManager.getPathCoords(state.getPathRecordId(), Schedulers.io()));
                 } else {
-
+                    // TODO(sbezek): hook up location provider to provide a stream of single-item lists containing the current location
+                    mapScreen.setData(Observable.from(Collections.singletonList(Collections.<PathCoord>emptyList())));
                 }
             }
         };
