@@ -53,6 +53,13 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onPause() {
+        // XXX HACK - force onDetachedFromWindow to be invoked in child views onPause
+        mContentFrame.removeAllViews();
+        super.onPause();
+    }
+
+    @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
 
     }

@@ -80,22 +80,10 @@ public class MainScreen extends DrawerLayout {
         addView(navScreen, drawerLayoutParams);
 
 
-        setDrawerListener(new DrawerListener() {
+        setDrawerListener(new SimpleDrawerListener() {
             @Override
             public void onDrawerSlide(View drawerView, float slideOffset) {
                 mapScreen.setOffset((int)(slideOffset * drawerWidth / 2));
-            }
-
-            @Override
-            public void onDrawerOpened(View drawerView) {
-            }
-
-            @Override
-            public void onDrawerClosed(View drawerView) {
-            }
-
-            @Override
-            public void onDrawerStateChanged(int newState) {
             }
         });
 
