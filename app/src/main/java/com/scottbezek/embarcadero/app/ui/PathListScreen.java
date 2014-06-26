@@ -7,8 +7,8 @@ import android.widget.BaseAdapter;
 import android.widget.FrameLayout;
 import android.widget.ListView;
 
-import com.scottbezek.embarcadero.app.model.PathManager;
 import com.scottbezek.embarcadero.app.model.data.PathListItem;
+import com.scottbezek.embarcadero.app.util.SubscribeWhileAttached;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -16,37 +16,29 @@ import java.util.List;
 
 import rx.Observable;
 import rx.Observer;
-import rx.Subscription;
 import rx.android.schedulers.AndroidSchedulers;
-import rx.schedulers.Schedulers;
 
 public class PathListScreen extends FrameLayout {
 
     private static final String TAG = PathListScreen.class.getName();
 
     private final PathListAdapter mAdapter;
-    private final Observable<List<PathListItem>> mPathListObservable;
-    private Subscription mPathListSubscription;
 
-    public PathListScreen(Context context, PathManager pathManager) {
+    public PathListScreen(Context context, Observable<List<PathListItem>> pathList) {
         super(context);
 
-        mPathListObservable = pathManager.getPathList(Schedulers.io());
         mAdapter = new PathListAdapter(context);
 
         ListView lv = new ListView(context);
         lv.setAdapter(mAdapter);
         addView(lv, ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT);
-    }
 
-    @Override
-    protected void onAttachedToWindow() {
-        super.onAttachedToWindow();
-        mPathListSubscription = mPathListObservable
-                .distinctUntilChanged()
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(new Observer<List<PathListItem>>() {
+        addOnAttachStateChangeListener(new SubscribeWhileAttached<>(
+                pathList
+                        .distinctUntilChanged()
+                        .observeOn(AndroidSchedulers.mainThread()),
+                new Observer<List<PathListItem>>() {
                     @Override
                     public void onCompleted() {}
 
@@ -59,14 +51,14 @@ public class PathListScreen extends FrameLayout {
                     public void onNext(List<PathListItem> pathListItems) {
                         mAdapter.setData(pathListItems);
                     }
-                });
+                }
+        ));
     }
 
     @Override
-    protected void onDetachedFromWindow() {
-        super.onDetachedFromWindow();
-        mPathListSubscription.unsubscribe();
+    protected void onAttachedToWindow() {
         mAdapter.setData(Collections.<PathListItem>emptyList());
+        super.onAttachedToWindow();
     }
 
     public interface PathSelectedListener {

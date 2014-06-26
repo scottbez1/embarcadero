@@ -1,5 +1,10 @@
 package com.scottbezek.embarcadero.app.model.location;
 
+import android.content.Context;
+import android.location.Location;
+import android.os.Bundle;
+import android.os.Looper;
+
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesClient.ConnectionCallbacks;
 import com.google.android.gms.common.GooglePlayServicesClient.OnConnectionFailedListener;
@@ -7,15 +12,12 @@ import com.google.android.gms.location.LocationClient;
 import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 
-import android.content.Context;
-import android.location.Location;
-import android.os.Bundle;
-import android.os.Looper;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
+import javax.annotation.CheckForNull;
 
 public class GooglePlayServicesLocationUpdateProvider implements
         LocationUpdateProvider {
@@ -136,6 +138,17 @@ public class GooglePlayServicesLocationUpdateProvider implements
                 mLocationClient.requestLocationUpdates(mLocationRequest, mUnderlyingListener,
                         Looper.getMainLooper());
             }
+        }
+    }
+
+    @Override
+    @CheckForNull
+    public Location getLastLocation() {
+        synchronized (mListenerLock) {
+            if (mConnectedToLocationClient) {
+                return mLocationClient.getLastLocation();
+            }
+            return null;
         }
     }
 }

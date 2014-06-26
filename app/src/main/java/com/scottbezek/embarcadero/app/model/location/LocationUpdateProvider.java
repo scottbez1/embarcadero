@@ -2,6 +2,8 @@ package com.scottbezek.embarcadero.app.model.location;
 
 import android.location.Location;
 
+import javax.annotation.CheckForNull;
+
 /**
  * Provides location updates as they occur.
  */
@@ -37,5 +39,12 @@ public interface LocationUpdateProvider {
      *            The listener to unregister for updates.
      */
     void stopLocationUpdates(LocationUpdateListener listener);
+
+    /**
+     * Returns the most recent known location, which may be extremely old or
+     * <code>null</code>.
+     */
+    @CheckForNull
+    Location getLastLocation();
 }
 

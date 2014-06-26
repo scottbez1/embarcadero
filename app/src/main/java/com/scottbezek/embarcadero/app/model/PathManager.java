@@ -90,11 +90,20 @@ public class PathManager {
                 final DbxTable pathsTable = datastore.getTable("paths");
                 final LocationUpdateQueue locationUpdateQueue = new LocationUpdateQueue(locationProvider);
 
+                final Location lastLocation = locationProvider.getLastLocation();
+
                 final PathRecordWriter pathWriter;
                 synchronized (datastoreLock) {
                     DbxRecord pathRecord = pathsTable.insert();
                     pathWriter = new PathRecordWriter(pathRecord);
                     pathWriter.setStartTime(System.currentTimeMillis());
+
+                    // If we know our current location, add it immediately so the path starts with at least one coord
+                    if (lastLocation != null) {
+                        // TODO(sbezek): ignore if last location is too old?
+                        pathWriter.addLocation(lastLocation);
+                    }
+
                     if (!DatastoreUtils.syncQuietly(datastoreWithLock)) {
                         return;
                     }

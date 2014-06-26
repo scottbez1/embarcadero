@@ -4,7 +4,7 @@ import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Color;
 import android.view.ViewGroup;
-import android.widget.FrameLayout;
+import android.widget.RelativeLayout;
 import android.widget.Toast;
 
 import com.google.android.gms.maps.CameraUpdate;
@@ -30,7 +30,7 @@ import rx.Observer;
 import rx.Subscription;
 import rx.android.schedulers.AndroidSchedulers;
 
-public class MapScreen extends FrameLayout {
+public class MapScreen extends RelativeLayout {
 
     private static final String TAG = MapScreen.class.getName();
     private static final LatLng GEOGRAPHIC_CENTER_OF_CONTIGUOUS_US = new LatLng(39.8282, -98.5795);
@@ -74,6 +74,10 @@ public class MapScreen extends FrameLayout {
         mMapView = new MapView(context, mapOptions);
         mMapContainer = new MapContainer(context, mMapView);
         addView(mMapContainer, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+    }
+
+    public void setOffset(int offsetPx) {
+        setScrollX(-offsetPx);
     }
 
     public void setData(Observable<List<PathCoord>> data) {

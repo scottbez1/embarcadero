@@ -1,19 +1,21 @@
 package com.scottbezek.embarcadero.app.model;
 
+import android.os.Bundle;
+import android.util.Log;
+
 import com.dropbox.sync.android.DbxAccount;
+import com.dropbox.sync.android.DbxAccountInfo;
 import com.dropbox.sync.android.DbxAccountManager;
 import com.dropbox.sync.android.DbxAccountManager.AccountListener;
 import com.dropbox.sync.android.DbxDatastore;
 import com.dropbox.sync.android.DbxDatastore.SyncStatusListener;
 import com.dropbox.sync.android.DbxDatastoreStatus;
 import com.dropbox.sync.android.DbxException;
+import com.scottbezek.embarcadero.app.util.DatastoreUtils.AutoSyncingDatastoreWithLock;
+import com.scottbezek.embarcadero.app.util.ObservableUtil;
 import com.scottbezek.embarcadero.app.util.RefCountedObject;
 import com.scottbezek.embarcadero.app.util.RefCountedObject.Closer;
 import com.scottbezek.embarcadero.app.util.RefCountedObject.Factory;
-import com.scottbezek.embarcadero.app.util.DatastoreUtils.AutoSyncingDatastoreWithLock;
-
-import android.os.Bundle;
-import android.util.Log;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -22,6 +24,8 @@ import java.util.Set;
 
 import javax.annotation.Nonnull;
 import javax.annotation.concurrent.GuardedBy;
+
+import rx.Observable;
 
 /**
  */
@@ -90,6 +94,7 @@ public class UserStateManager {
         private static final String BUNDLE_KEY_USER_ID = "BUNDLE_KEY_USER_ID";
 
         private final String mUserId;
+        private final Observable<DbxAccountInfo> mDbxAccountInfo;
         private final PathManager mPathManager;
         private final RefCountedObject<AutoSyncingDatastoreWithLock> mDatastoreRef;
 
@@ -122,10 +127,15 @@ public class UserStateManager {
             });
             mPathManager = new PathManager(mDatastoreRef);
             mUserId = account.getUserId();
+            mDbxAccountInfo = ObservableUtil.createAccountInfoObservable(account);
         }
 
         public PathManager getPathManager() {
             return mPathManager;
+        }
+
+        public Observable<DbxAccountInfo> getAccountInfo() {
+            return mDbxAccountInfo;
         }
 
         public Bundle toBundle() {

@@ -2,12 +2,11 @@ package com.scottbezek.embarcadero.app.ui;
 
 import android.content.Context;
 import android.location.Location;
-import android.os.Looper;
-import android.view.LayoutInflater;
+import android.support.v4.widget.DrawerLayout;
+import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.LinearLayout;
-import android.widget.TextView;
 
 import com.google.android.gms.location.LocationRequest;
 import com.scottbezek.embarcadero.app.R;
@@ -15,8 +14,6 @@ import com.scottbezek.embarcadero.app.model.PathManager;
 import com.scottbezek.embarcadero.app.model.PathManager.RecordingState;
 import com.scottbezek.embarcadero.app.model.UserStateManager.UserState;
 import com.scottbezek.embarcadero.app.model.data.PathCoord;
-import com.scottbezek.embarcadero.app.model.location.GooglePlayServicesLocationUpdateProvider;
-import com.scottbezek.embarcadero.app.util.ResettableClickListener;
 
 import java.util.Collections;
 import java.util.List;
@@ -30,7 +27,7 @@ import rx.functions.Action1;
 import rx.functions.Func1;
 import rx.schedulers.Schedulers;
 
-public class MainScreen extends LinearLayout {
+public class MainScreen extends DrawerLayout {
 
     private final Observable<RecordingState> mRecordingState;
     private final Action1<RecordingState> mRecordingStateChange;
@@ -39,12 +36,6 @@ public class MainScreen extends LinearLayout {
 
     public MainScreen(final Context context, UserState userState) {
         super(context);
-
-        setOrientation(VERTICAL);
-        LayoutInflater.from(context).inflate(R.layout.screen_main, this, true);
-
-        TextView welcomeText = (TextView)findViewById(R.id.welcome_message);
-        welcomeText.setText("Welcome!");
 
 
         final long MIN_UPDATE_TIME_MS = 1000;
@@ -61,38 +52,60 @@ public class MainScreen extends LinearLayout {
         mRecordingState = pathManager.getRecordingState();
 
 
-        final ResettableClickListener startClickListener;
-        final ResettableClickListener stopClickListener;
-        startClickListener = new ResettableClickListener() {
-            @Override
-            protected void onClick() {
-                pathManager.startRecording(new GooglePlayServicesLocationUpdateProvider(
-                        context, dummyRequest, Looper.getMainLooper()));
-            }
-        };
-        startButton.setOnClickListener(startClickListener);
-
-        stopClickListener = new ResettableClickListener() {
-            @Override
-            protected void onClick() {
-                pathManager.stopRecording();
-            }
-        };
-        stopButton.setOnClickListener(stopClickListener);
-
-
-        addView(new PathListScreen(context, pathManager), new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1));
+//        final ResettableClickListener startClickListener;
+//        final ResettableClickListener stopClickListener;
+//        startClickListener = new ResettableClickListener() {
+//            @Override
+//            protected void onClick() {
+//                pathManager.startRecording(new GooglePlayServicesLocationUpdateProvider(
+//                        context, dummyRequest, Looper.getMainLooper()));
+//            }
+//        };
+//        startButton.setOnClickListener(startClickListener);
+//
+//        stopClickListener = new ResettableClickListener() {
+//            @Override
+//            protected void onClick() {
+//                pathManager.stopRecording();
+//            }
+//        };
+//        stopButton.setOnClickListener(stopClickListener);
 
         final MapScreen mapScreen = new MapScreen(context);
-        addView(mapScreen, new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1));
+        addView(mapScreen, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        final int drawerWidth = getResources().getDimensionPixelSize(R.dimen.drawer_width);
+        final LayoutParams drawerLayoutParams = new LayoutParams(drawerWidth, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.LEFT);
+        final NavScreen navScreen = new NavScreen(context, userState.getAccountInfo(), pathManager.getPathList(Schedulers.io()));
+        addView(navScreen, drawerLayoutParams);
+
+
+        setDrawerListener(new DrawerListener() {
+            @Override
+            public void onDrawerSlide(View drawerView, float slideOffset) {
+                mapScreen.setOffset((int)(slideOffset * drawerWidth / 2));
+            }
+
+            @Override
+            public void onDrawerOpened(View drawerView) {
+            }
+
+            @Override
+            public void onDrawerClosed(View drawerView) {
+            }
+
+            @Override
+            public void onDrawerStateChanged(int newState) {
+            }
+        });
 
         mRecordingStateChange = new Action1<RecordingState>() {
             @Override
             public void call(RecordingState state) {
-                stopButton.setVisibility(state.isRecording() ? View.VISIBLE : View.GONE);
-                startButton.setVisibility(state.isRecording() ? View.GONE : View.VISIBLE);
-                startClickListener.reset();
-                stopClickListener.reset();
+//                stopButton.setVisibility(state.isRecording() ? View.VISIBLE : View.GONE);
+//                startButton.setVisibility(state.isRecording() ? View.GONE : View.VISIBLE);
+//                startClickListener.reset();
+//                stopClickListener.reset();
 
                 if (state.isRecording()) {
                     mapScreen.setData(pathManager.getPathCoords(state.getPathRecordId(), Schedulers.io()));
