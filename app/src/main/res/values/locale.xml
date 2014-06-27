@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="locale_language">en</string>
+    <string name="locale_country"/>
+    <string name="date_format_month_day_time">MMM d, h:mm a</string>
+</resources>

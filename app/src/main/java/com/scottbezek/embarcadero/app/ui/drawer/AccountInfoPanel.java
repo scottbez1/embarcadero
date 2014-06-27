@@ -1,4 +1,4 @@
-package com.scottbezek.embarcadero.app.ui;
+package com.scottbezek.embarcadero.app.ui.drawer;
 
 import android.content.Context;
 import android.view.LayoutInflater;

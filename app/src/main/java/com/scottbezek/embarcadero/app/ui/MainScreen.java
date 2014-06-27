@@ -3,6 +3,7 @@ package com.scottbezek.embarcadero.app.ui;
 import android.content.Context;
 import android.location.Location;
 import android.support.v4.widget.DrawerLayout;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -14,6 +15,9 @@ import com.scottbezek.embarcadero.app.model.PathManager;
 import com.scottbezek.embarcadero.app.model.PathManager.RecordingState;
 import com.scottbezek.embarcadero.app.model.UserStateManager.UserState;
 import com.scottbezek.embarcadero.app.model.data.PathCoord;
+import com.scottbezek.embarcadero.app.ui.drawer.NavScreen;
+import com.scottbezek.embarcadero.app.ui.map.MapScreen;
+import com.scottbezek.embarcadero.app.ui.drawer.pathlist.PathListScreen.PathSelectedListener;
 
 import java.util.Collections;
 import java.util.List;
@@ -28,6 +32,8 @@ import rx.functions.Func1;
 import rx.schedulers.Schedulers;
 
 public class MainScreen extends DrawerLayout {
+
+    private static final String TAG = MainScreen.class.getName();
 
     private final Observable<RecordingState> mRecordingState;
     private final Action1<RecordingState> mRecordingStateChange;
@@ -71,12 +77,20 @@ public class MainScreen extends DrawerLayout {
 //        };
 //        stopButton.setOnClickListener(stopClickListener);
 
+        PathSelectedListener pathSelectionListener = new PathSelectedListener() {
+            @Override
+            public void onPathSelected(String pathId) {
+                Log.d(TAG, "Path selected: " + pathId);
+            }
+        };
+
         final MapScreen mapScreen = new MapScreen(context);
         addView(mapScreen, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         final int drawerWidth = getResources().getDimensionPixelSize(R.dimen.drawer_width);
         final LayoutParams drawerLayoutParams = new LayoutParams(drawerWidth, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.LEFT);
-        final NavScreen navScreen = new NavScreen(context, userState.getAccountInfo(), pathManager.getPathList(Schedulers.io()));
+        final NavScreen navScreen = new NavScreen(context, userState.getAccountInfo(),
+                pathManager.getPathList(Schedulers.io()), pathSelectionListener);
         addView(navScreen, drawerLayoutParams);
 
 
